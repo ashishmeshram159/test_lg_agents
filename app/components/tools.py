@@ -1,0 +1,127 @@
+# app/components/tools.py
+
+import os
+import sqlite3
+import json
+from typing import List, Dict, Any
+
+from langchain.tools import tool
+from langchain_community.tools.tavily_search import TavilySearchResults
+
+
+# ---------- Tavily client (low-level) ---------- #
+
+tavily_client = TavilySearchResults(
+    max_results=5,
+    include_answer=True,
+)
+
+
+@tool
+def tavily_custom_search(query: str) -> str:
+    """
+    Use Tavily web search to answer user questions with a concise,
+    helpful response.
+
+    This wrapper:
+    - Uses your Tavily API key from the environment.
+    - Returns Tavily's summarized answer as a string.
+    - Is the ONLY Tavily-facing tool exposed to agents.
+    """
+    return tavily_client.run(query)
+
+
+# ---------- SQLite DB tool (READ-ONLY) ---------- #
+
+# Path controlled by env var SQLITE_DB_PATH, defaulting to data/app.db
+SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", "data/app.db")
+
+
+@tool
+def sqlite_select_tool(query: str) -> str:
+    """
+    Run a READ-ONLY SELECT query on the SQLite database.
+
+    RULES:
+    - Query MUST start with 'SELECT' (case-insensitive).
+    - No multiple statements (no extra semicolons).
+    - Always prefer queries with LIMIT.
+
+    Input:
+        query: A full SQL SELECT statement, e.g.
+            "SELECT id, name FROM users WHERE age > 30 LIMIT 10"
+
+    Output (as JSON string):
+        {
+          "rows": [ { "col": value, ... }, ... ],
+          "row_count": <int>
+        }
+        or an "error" field if something goes wrong.
+    """
+    q = query.strip().lower()
+    if not q.startswith("select"):
+        return json.dumps(
+            {
+                "error": "Only SELECT queries are allowed. Your query must start with 'SELECT'.",
+                "original_query": query,
+            }
+        )
+
+    if ";" in query:
+        return json.dumps(
+            {
+                "error": "Multiple statements are not allowed. Remove extra semicolons.",
+                "original_query": query,
+            }
+        )
+
+    if not os.path.exists(SQLITE_DB_PATH):
+        return json.dumps(
+            {
+                "error": f"SQLite DB file not found at {SQLITE_DB_PATH}",
+                "original_query": query,
+            }
+        )
+
+    try:
+        conn = sqlite3.connect(SQLITE_DB_PATH)
+        conn.row_factory = sqlite3.Row
+        cur = conn.cursor()
+        cur.execute(query)
+        rows = cur.fetchall()
+        conn.close()
+
+        result_rows: List[Dict[str, Any]] = [dict(row) for row in rows]
+
+        return json.dumps(
+            {
+                "rows": result_rows,
+                "row_count": len(result_rows),
+            },
+            default=str,
+        )
+    except Exception as e:
+        return json.dumps(
+            {
+                "error": f"SQLite query failed: {e}",
+                "original_query": query,
+            }
+        )
+
+
+# ---------- Math tool ---------- #
+
+@tool
+def math_tool(expression: str) -> str:
+    """
+    Evaluate a simple math expression (Python syntax).
+
+    Examples:
+    - "15 * (4 + 3)"
+    - "100 / 3"
+    """
+    try:
+        result = eval(expression, {"__builtins__": {}})
+        return f"Result: {result}"
+    except Exception as e:
+        return f"Error in expression: {e}"
