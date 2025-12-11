@@ -14,6 +14,6 @@ class GraphState(TypedDict):
     - final_answer_ready: marker that we're done for this turn
     """
     messages: List[BaseMessage]
-    task_route: Optional[Literal["agent_a", "agent_b", "none"]]
+    task_route: Optional[dict]
     task_payload: Optional[dict]
     final_answer_ready: bool

@@ -5,6 +5,7 @@ import os
 from fastapi import FastAPI
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+import uvicorn
 
 # Loading env vars:
 from dotenv import load_dotenv
@@ -102,7 +103,6 @@ async def chat_endpoint(body: ChatRequest) -> ChatResponse:
 
 
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
