@@ -1,0 +1,18 @@
+
+# Testing search agent + tool:
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "general-1", "message": "Search online and tell me what Kyoto is famous for in autumn."}'
+
+
+# Testing Math agent + tool:
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "sw-2", "message": "What is (2024^2 - 2000^2) / 12?"}'
+
+
+
+# Testing db agent + tool:
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "swe-1", "message": "From the db, list the last 5 orders with id and amount."}'
