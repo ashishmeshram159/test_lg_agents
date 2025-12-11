@@ -1,0 +1,41 @@
+# langchain==0.3.0
+# langchain-openai==0.3.0
+# langchain-community
+# python-dotenv
+
+# fastapi>=0.109.0
+# uvicorn[standard]>=0.27.0
+
+# langchain>=0.2.0
+# langchain-openai>=0.1.7
+# langgraph>=0.0.40
+
+# pydantic>=2.5.0
+# python-dotenv>=1.0.0
+
+# # optional: useful for async HTTP calls inside tools
+# httpx>=0.26.0
+# requests>=2.31.0
+
+# # If you want Tavily search tool later
+# tavily-python>=0.3.0
+
+# # If using numpy or pandas in tools
+# numpy>=1.26.0
+# pandas>=2.1.0
+
+
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+langchain>=0.2.0
+langchain-openai>=0.1.7
+langgraph>=0.0.40
+langchain-community>=0.2.0
+
+python-dotenv>=1.0.0
+tavily-python>=0.3.0
+
+pydantic>=2.5.0
+httpx>=0.26.0
+requests>=2.31.0
