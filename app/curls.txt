@@ -2,7 +2,7 @@
 # Testing search agent + tool:
 curl -X POST "http://localhost:8000/chat" \
   -H "Content-Type: application/json" \
-  -d '{"session_id": "general-1", "message": "Search online and tell me what Kyoto is famous for in autumn."}'
+  -d '{"session_id": "general-1", "message": "Tell me what Kyoto is famous for in autumn."}'
 
 
 # Testing Math agent + tool:
@@ -16,3 +16,18 @@ curl -X POST "http://localhost:8000/chat" \
 curl -X POST "http://localhost:8000/chat" \
   -H "Content-Type: application/json" \
   -d '{"session_id": "swe-1", "message": "Can you list the last 5 orders with id and amount."}'
+
+
+# Testing medical agent + tool:
+curl -X POST "http://localhost:8000/chat" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "test-medical-1",
+    "message": "What did my doctor say last time about my diabetes and blood pressure?",
+    "customer": {
+      "id": "CUST_001",
+      "name": "Rahul Sharma",
+      "dob": "1992-03-15",
+      "email": "rahul@example.com"
+    }
+  }'
