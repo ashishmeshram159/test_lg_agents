@@ -15,4 +15,4 @@ curl -X POST "http://localhost:8000/chat" \
 # Testing db agent + tool:
 curl -X POST "http://localhost:8000/chat" \
   -H "Content-Type: application/json" \
-  -d '{"session_id": "swe-1", "message": "From the db, list the last 5 orders with id and amount."}'
+  -d '{"session_id": "swe-1", "message": "Can you list the last 5 orders with id and amount."}'

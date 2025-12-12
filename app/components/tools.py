@@ -283,13 +283,10 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 # DB PATH RESOLUTION
 # ============================================================
 
-# Path to this file: .../app/components/tools.py
-THIS_FILE = Path(__file__).resolve()
+CURR_FILE = Path(__file__).resolve()
+APP_DIR = CURR_FILE.parents[1]
 
-# app/  (parent of components)
-APP_DIR = THIS_FILE.parents[1]
-
-# Default DB path: app/db/app.db
+# Default DB path: app/db/app.db:
 DEFAULT_DB_PATH = APP_DIR / "db" / "app.db"
 
 # Allow override via env var, else use app/db/app.db
@@ -327,7 +324,7 @@ def tavily_custom_search(query: str) -> str:
 
 
 # ============================================================
-# SQLITE DB SELECT TOOL (READ-ONLY)
+# SQLITE DB SELECT TOOL (Customer orders only)
 # ============================================================
 
 
@@ -445,13 +442,36 @@ def math_tool(expression: str) -> str:
 
 
 
-# curl -X POST "http://localhost:8000/chat" \
-#   -H "Content-Type: application/json" \
-#   -d '{"session_id": "test-db", "message": "From the database, get the last 5 orders (id and amount) from the orders table."}'
 
+@tool
+def get_customer_clinical_summary(customer_id: str) -> str:
+    """
+    Get the most recent, detailed clinical summary text for a given customer_id.
 
+    Returns ONE long narrative (doctor notes / history / guidance) that
+    the MEDICAL agent will use to answer questions.
+    """
+    print(f"[TOOL] get_customer_clinical_summary called with customer_id={customer_id}")
 
+    conn = sqlite3.connect(SQLITE_DB_PATH)
+    cur = conn.cursor()
 
-# curl -X POST "http://localhost:8000/chat" \
-#   -H "Content-Type: application/json" \
-#   -d '{"session_id": "test-math", "message": "What is (1234 * 567) / 19?"}'
+    cur.execute(
+        """
+        SELECT summary_text
+        FROM clinical_summaries
+        WHERE customer_id = ?
+        ORDER BY datetime(created_at) DESC
+        LIMIT 1
+        """,
+        (customer_id,),
+    )
+
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        return f"No clinical summary found for customer_id={customer_id!r}."
+
+    (summary_text,) = row
+    return summary_text
