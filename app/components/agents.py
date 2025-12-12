@@ -255,8 +255,12 @@ from langchain_core.messages import (
 from langchain_core.tools import Tool
 
 from components.state import GraphState
-from components.tools import tavily_custom_search, math_tool, sqlite_select_tool
-
+from components.tools import (
+    tavily_custom_search,
+    math_tool,
+    sqlite_select_tool,
+    get_customer_clinical_summary,
+)
 
 # ============================================================
 # SHARED LLM + TOOLS
@@ -267,9 +271,11 @@ agent_llm = ChatOpenAI(
     temperature=0.2,
 )
 
-general_tools: List[Tool] = [tavily_custom_search]
-math_tools: List[Tool] = [math_tool]
-db_tools: List[Tool] = [sqlite_select_tool]
+
+general_tools = [tavily_custom_search]
+math_tools = [math_tool]
+db_tools = [sqlite_select_tool]
+medical_tools = [get_customer_clinical_summary]
 
 
 # ============================================================
@@ -456,6 +462,114 @@ def agent_db_node(state: GraphState) -> GraphState:
 
     first_response = model_with_tools.invoke(
         [system_msg] + messages + [HumanMessage(content=f"Task: {task_desc}")]
+    )
+
+    new_state = state.copy()
+    new_state["messages"] = messages + [first_response]
+    return new_state
+
+
+# ============================================================
+# MEDICAL AGENT (CUSTOMER-SPECIFIC CLINICAL SUMMARY)
+# ============================================================
+
+def agent_medical_node(state: GraphState) -> GraphState:
+    """
+    MEDICAL agent:
+    - First pass: uses get_customer_clinical_summary via tool_calls.
+      The tool returns ONE big detailed narrative text for the active customer.
+    - Second pass: consumes that text and answers the user's medical question,
+      staying within what the summary + safe generic guidance allows.
+    """
+    messages = cast(List[BaseMessage], state["messages"])
+    payload = state.get("task_payload") or {}
+    task_desc = payload.get("description", "")
+
+    # Persistent customer info across orchestrator → agents → tools
+    customer = state.get("customer") or payload.get("customer") or {}
+    customer_id = (
+        state.get("customer_id")
+        or payload.get("customer_id")
+        or customer.get("id")
+        or customer.get("customer_id")
+        or customer.get("customerId")
+    )
+
+    if customer_id:
+        id_hint = (
+            f"The active customer_id for this conversation is '{customer_id}'. "
+            "When you call any medical or DB tools that need a customer_id, "
+            "you MUST use this value exactly and not invent or change it."
+        )
+    else:
+        id_hint = (
+            "No customer_id is available. You MUST NOT call tools requiring "
+            "a customer_id. Instead, explain that you cannot access records."
+        )
+
+    system_msg = SystemMessage(
+        content=(
+            "You are the MEDICAL agent.\n"
+            "- You ONLY handle medical / clinical questions about the ACTIVE CUSTOMER.\n"
+            "- You use the 'get_customer_clinical_summary' tool to read their detailed\n"
+            "  clinical history, diagnoses, medications, and doctor's guidance.\n"
+            f"- {id_hint}\n\n"
+            "SAFETY RULES:\n"
+            "- Do NOT invent or change the doctor's instructions in the summary.\n"
+            "- Do NOT prescribe new medications or make definitive diagnoses.\n"
+            "- You may give simple, generic safety advice (e.g., 'consult your doctor',\n"
+            "  'if severe symptoms, seek urgent care').\n"
+            "- If the question is clearly non-medical, say you only handle medical queries\n"
+            "  and that the orchestrator should route elsewhere.\n"
+        )
+    )
+
+    last_msg = messages[-1]
+
+    # SECOND PASS: last message is a ToolMessage (tool result already fetched)
+    if isinstance(last_msg, ToolMessage):
+        tool_output = last_msg.content  # big summary_text blob
+        user_msg = _get_last_human(messages)
+        user_text = user_msg.content if user_msg else ""
+
+        final_response = agent_llm.invoke(
+            [
+                system_msg,
+                HumanMessage(
+                    content=(
+                        "User question:\n"
+                        f"{user_text}\n\n"
+                        "Customer clinical summary (from tool):\n"
+                        f"{tool_output}\n\n"
+                        f"Task from orchestrator: {task_desc}\n\n"
+                        "Using ONLY the information from the clinical summary plus safe, "
+                        "generic guidance, answer the user's question clearly.\n"
+                        "If something is not mentioned in the summary, say you don't know "
+                        "and that they should consult their doctor."
+                    )
+                ),
+            ]
+        )
+
+        new_state = state.copy()
+        new_state["messages"] = messages + [final_response]
+        return new_state
+
+    # FIRST PASS: no tool result yet -> allow get_customer_clinical_summary calls
+    model_with_tools = agent_llm.bind_tools(medical_tools)
+
+    extra_hint = ""
+    if customer_id:
+        extra_hint = f" The active customer_id is '{customer_id}'."
+
+    first_response = model_with_tools.invoke(
+        [system_msg]
+        + messages
+        + [
+            HumanMessage(
+                content=f"Task from orchestrator: {task_desc}.{extra_hint}"
+            )
+        ]
     )
 
     new_state = state.copy()
